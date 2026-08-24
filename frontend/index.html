@@ -4,7 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>OpportunityPulse AI</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com"
+   
+const BACKEND_URL = "https://opportunitypulse-backend.onrender.com";></script>
 </head>
 <body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-10 font-sans">
   <div class="max-w-4xl mx-auto space-y-6">
@@ -84,8 +86,7 @@
       searchingCard.classList.remove('hidden');
       searchingStatus.innerText = `Reasoning lateral career pivots for "${query}"...`;
 
-      const evtSource = new EventSource(`/api/stream-discover?query=${encodeURIComponent(query)}`);
-
+      const evtSource = new EventSource(`${BACKEND_URL}/api/stream-discover?query=${encodeURIComponent(query)}`);
       evtSource.onmessage = function(e) {
         const data = JSON.parse(e.data);
 
@@ -193,11 +194,11 @@
       for (const niche of targetNiches) {
         nicheOffsets[niche.title] = (nicheOffsets[niche.title] || 1) + 1;
         try {
-          const res = await fetch('/api/more-jobs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ niche_title: niche.title, search_dork: niche.dork, offset: nicheOffsets[niche.title], limit: 2 })
-          });
+          const res = await fetch(`${BACKEND_URL}/api/more-jobs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ niche_title: niche.title, search_dork: niche.dork, offset: nicheOffsets[niche.title], limit: 2 })
+});
           const data = await res.json();
           if (data.jobs?.length) allJobs.push(...data.jobs);
         } catch (e) {
