@@ -84,7 +84,7 @@
       searchingCard.classList.remove('hidden');
       searchingStatus.innerText = `Reasoning lateral career pivots for "${query}"...`;
 
-      const evtSource = new EventSource(`http://localhost:8000/api/stream-discover?query=${encodeURIComponent(query)}`);
+      const evtSource = new EventSource(`/api/stream-discover?query=${encodeURIComponent(query)}`);
 
       evtSource.onmessage = function(e) {
         const data = JSON.parse(e.data);
@@ -193,7 +193,7 @@
       for (const niche of targetNiches) {
         nicheOffsets[niche.title] = (nicheOffsets[niche.title] || 1) + 1;
         try {
-          const res = await fetch('http://localhost:8000/api/more-jobs', {
+          const res = await fetch('/api/more-jobs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ niche_title: niche.title, search_dork: niche.dork, offset: nicheOffsets[niche.title], limit: 2 })
