@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>OpportunityPulse AI</title>
-  <script src="https://cdn.tailwindcss.com"
-   
-const BACKEND_URL = "https://opportunitypulse-backend.onrender.com";></script>
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="/config.js" defer></script>
+  <script src="/app.js" defer></script>
 </head>
 <body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-10 font-sans">
   <div class="max-w-4xl mx-auto space-y-6">
@@ -17,14 +17,14 @@ const BACKEND_URL = "https://opportunitypulse-backend.onrender.com";></script>
         <p class="text-xs text-zinc-400 mt-1">Autonomous Lateral Career Intelligence</p>
       </div>
       <span class="text-xs font-mono bg-zinc-900 border border-zinc-800 text-emerald-400 px-3 py-1 rounded-full">
-        Scraper Studio Active
+        Powered by Scraper Studio
       </span>
     </header>
 
     <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex gap-3">
-      <input id="queryInput" type="text" value="computer engineer active" placeholder="Enter background (e.g. computer engineer active, electronics desk job)" 
+      <input aria-label="Career background and work preference" maxlength="2000" id="queryInput" type="text" value="computer engineer active" placeholder="Enter background (e.g. computer engineer active, electronics desk job)"
         class="flex-1 bg-zinc-950 border border-zinc-700/80 rounded-lg px-4 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 font-mono" />
-      <button onclick="startDiscovery()" id="searchBtn" class="bg-zinc-100 hover:bg-white text-zinc-950 font-semibold px-5 py-2.5 rounded-lg text-sm transition">
+      <button id="searchBtn" class="bg-zinc-100 hover:bg-white text-zinc-950 font-semibold px-5 py-2.5 rounded-lg text-sm transition">
         Discover Niches
       </button>
     </div>
@@ -32,12 +32,14 @@ const BACKEND_URL = "https://opportunitypulse-backend.onrender.com";></script>
     <div id="nichesBox" class="hidden bg-zinc-900/90 border border-zinc-800 rounded-xl p-5 space-y-3">
       <div class="flex items-center justify-between">
         <span class="text-indigo-400 text-xs font-semibold uppercase tracking-wider font-mono">Select a Niche Topic to Filter</span>
-        <button id="showAllBtn" onclick="selectNicheFilter('ALL')" class="text-[11px] font-mono bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-2.5 py-1 rounded transition hidden">
+        <button id="showAllBtn" class="text-[11px] font-mono bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-2.5 py-1 rounded transition hidden">
           Show All Topics
         </button>
       </div>
       <div id="nichesList" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5"></div>
     </div>
+
+    <p id="notice" role="status" aria-live="polite" class="text-sm text-zinc-300"></p>
 
     <div id="jobsList" class="space-y-3"></div>
 
@@ -47,170 +49,12 @@ const BACKEND_URL = "https://opportunitypulse-backend.onrender.com";></script>
     </div>
 
     <div id="findMoreContainer" class="hidden pt-2 text-center">
-      <button onclick="fetchMoreForActiveNiche()" id="findMoreBtn" class="w-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 font-mono text-xs py-3 rounded-xl transition">
+      <button id="findMoreBtn" class="w-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 font-mono text-xs py-3 rounded-xl transition">
         Find More Postings for <span id="moreNicheLabel" class="text-indigo-400 font-semibold">Active Niche</span>
       </button>
     </div>
 
   </div>
 
-  <script>
-    let allJobs = [];
-    let discoveredNiches = [];
-    let activeFilter = 'ALL';
-    let nicheOffsets = {};
-
-    function startDiscovery() {
-      const query = document.getElementById('queryInput').value;
-      const btn = document.getElementById('searchBtn');
-      const nichesBox = document.getElementById('nichesBox');
-      const nichesList = document.getElementById('nichesList');
-      const jobsList = document.getElementById('jobsList');
-      const searchingCard = document.getElementById('searchingCard');
-      const searchingStatus = document.getElementById('searchingStatus');
-      const findMoreContainer = document.getElementById('findMoreContainer');
-      const showAllBtn = document.getElementById('showAllBtn');
-
-      allJobs = [];
-      discoveredNiches = [];
-      activeFilter = 'ALL';
-      nicheOffsets = {};
-
-      btn.disabled = true;
-      btn.innerText = "Discovering...";
-      nichesBox.classList.add('hidden');
-      showAllBtn.classList.add('hidden');
-      nichesList.innerHTML = '';
-      jobsList.innerHTML = '';
-      findMoreContainer.classList.add('hidden');
-      searchingCard.classList.remove('hidden');
-      searchingStatus.innerText = `Reasoning lateral career pivots for "${query}"...`;
-
-      const evtSource = new EventSource(`${BACKEND_URL}/api/stream-discover?query=${encodeURIComponent(query)}`);
-      evtSource.onmessage = function(e) {
-        const data = JSON.parse(e.data);
-
-        if (data.type === 'niches_ready') {
-          nichesBox.classList.remove('hidden');
-          discoveredNiches = data.niches;
-          renderNicheCards();
-        }
-        if (data.type === 'searching_niche') {
-          searchingStatus.innerText = `Scouting postings for: ${data.niche}...`;
-        }
-        if (data.type === 'job_found') {
-          allJobs.push(data.job);
-          renderFilteredJobs();
-        }
-        if (data.type === 'done') {
-          evtSource.close();
-          searchingCard.classList.add('hidden');
-          btn.disabled = false;
-          btn.innerText = "Discover Niches";
-          if (allJobs.length > 0) {
-            findMoreContainer.classList.remove('hidden');
-            updateFindMoreLabel();
-          }
-        }
-      };
-
-      evtSource.onerror = function() {
-        evtSource.close();
-        searchingCard.classList.add('hidden');
-        btn.disabled = false;
-        btn.innerText = "Discover Niches";
-      };
-    }
-
-    function renderNicheCards() {
-      const list = document.getElementById('nichesList');
-      list.innerHTML = discoveredNiches.map(n => {
-        const isSelected = activeFilter === n.title;
-        const border = isSelected ? 'border-indigo-500 bg-indigo-950/40' : 'border-zinc-800 bg-zinc-950/80 hover:border-zinc-700';
-        return `
-          <div onclick="selectNicheFilter('${escape(n.title)}')" class="${border} p-3.5 rounded-lg cursor-pointer transition text-left space-y-1">
-            <p class="text-xs font-semibold ${isSelected ? 'text-indigo-300' : 'text-zinc-200'}">${n.title}</p>
-            <p class="text-[11px] text-zinc-400 line-clamp-2">${n.rationale}</p>
-          </div>
-        `;
-      }).join('');
-    }
-
-    function selectNicheFilter(nicheTitleEsc) {
-      activeFilter = nicheTitleEsc === 'ALL' ? 'ALL' : unescape(nicheTitleEsc);
-      document.getElementById('showAllBtn').classList.toggle('hidden', activeFilter === 'ALL');
-      renderNicheCards();
-      renderFilteredJobs();
-      updateFindMoreLabel();
-    }
-
-    function renderFilteredJobs() {
-      const list = document.getElementById('jobsList');
-      const filtered = activeFilter === 'ALL' ? allJobs : allJobs.filter(j => j.niche_category === activeFilter);
-      list.innerHTML = '';
-
-      if (!filtered.length) {
-        list.innerHTML = `<div class="p-6 border border-zinc-800 rounded-xl text-center text-xs text-zinc-500">No jobs found under this category yet. Click "Find More" below.</div>`;
-        return;
-      }
-
-      filtered.forEach(job => {
-        const card = document.createElement('div');
-        card.className = 'bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700/80 rounded-xl p-5 transition flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4';
-        card.innerHTML = `
-          <div class="space-y-1.5 flex-1 pr-2">
-            <div class="flex items-center gap-2">
-              <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700/60">
-                ${job.niche_category}
-              </span>
-              <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-950 text-zinc-400 border border-zinc-800">
-                ${job.work_type}
-              </span>
-            </div>
-            <div>
-              <h2 class="text-sm font-semibold text-zinc-100 tracking-tight">${job.job_title}</h2>
-              <p class="text-xs text-zinc-400 mt-0.5">${job.company_name} &bull; ${job.location}</p>
-            </div>
-            <p class="text-xs text-zinc-400 line-clamp-2 leading-relaxed pt-1 font-sans">${job.description}</p>
-          </div>
-          <a href="${job.apply_url || job.source_url}" target="_blank" class="text-xs bg-zinc-100 hover:bg-white text-zinc-950 font-semibold px-4 py-2 rounded-lg transition whitespace-nowrap shadow-sm">
-            Apply Now ↗
-          </a>
-        `;
-        list.appendChild(card);
-      });
-    }
-
-    function updateFindMoreLabel() {
-      document.getElementById('moreNicheLabel').innerText = activeFilter === 'ALL' ? 'All Niches' : `"${activeFilter}"`;
-    }
-
-    async function fetchMoreForActiveNiche() {
-      const btn = document.getElementById('findMoreBtn');
-      btn.disabled = true;
-      btn.innerText = "Scraping additional postings...";
-
-      const targetNiches = activeFilter === 'ALL' ? discoveredNiches : discoveredNiches.filter(n => n.title === activeFilter);
-      for (const niche of targetNiches) {
-        nicheOffsets[niche.title] = (nicheOffsets[niche.title] || 1) + 1;
-        try {
-          const res = await fetch(`${BACKEND_URL}/api/more-jobs`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ niche_title: niche.title, search_dork: niche.dork, offset: nicheOffsets[niche.title], limit: 2 })
-});
-          const data = await res.json();
-          if (data.jobs?.length) allJobs.push(...data.jobs);
-        } catch (e) {
-          console.error(e);
-        }
-      }
-
-      renderFilteredJobs();
-      btn.disabled = false;
-      updateFindMoreLabel();
-      btn.innerText = `Find More Postings for ${document.getElementById('moreNicheLabel').innerText}`;
-    }
-  </script>
 </body>
 </html>
