@@ -10,7 +10,9 @@ services:
         sync: false
       - key: BRIGHTDATA_COLLECTOR_ID
         sync: false
+      - key: BRIGHTDATA_UNLOCKER_ZONE
+        sync: false
       - key: CORS_ORIGINS
         sync: false
       - key: GEMINI_MODEL
-        value: gemini-2.5-flash
+        value: gemini-3.5-flash-lite

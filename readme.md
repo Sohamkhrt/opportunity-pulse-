@@ -14,7 +14,7 @@ npm run build
 .venv/Scripts/python -m backend.run
 ```
 
-Before starting, add the settings from `.env.example` to your existing `.env`; do not overwrite existing credentials. On a fresh checkout copy `.env.example` to `.env`. Set `GEMINI_API_KEY`, `BRIGHTDATA_API_KEY`, and a collector ID belonging to your Bright Data account. The previous application's Lever collector ID was `c_mt2zb7wq1kjlbklctz`; configure `BRIGHTDATA_COLLECTOR_ID` with it only if that collector is still available to your account.
+Before starting, add the settings from `.env.example` to your existing `.env`; do not overwrite existing credentials. On a fresh checkout copy `.env.example` to `.env`. Set `GEMINI_API_KEY`, `BRIGHTDATA_API_KEY`, a `BRIGHTDATA_SERP_ZONE` or `BRIGHTDATA_UNLOCKER_ZONE`, and a collector ID belonging to your Bright Data account. The previous application's Lever collector ID was `c_mt2zb7wq1kjlbklctz`; configure `BRIGHTDATA_COLLECTOR_ID` with it only if that collector is still available to your account.
 
 The server serves both the built frontend and API. With no `PORT`, the OS picks a free port shown at startup. In the printed address, replace the bind host `0.0.0.0` with your machine's hostname to open it in a browser. Set `PORT` in `.env` if you want a stable port. Do not open the source HTML with `file://`. On macOS/Linux use `.venv/bin/python` in the commands above.
 
@@ -25,7 +25,7 @@ Rebuild with `npm run build` after changing frontend files. No provider keys are
 This is the simplest route: one origin serves the page and streams, so no cross-origin setup is required.
 
 1. Push this repository and create a Render Web Service using its Docker runtime, or import `render.yaml` as a Blueprint.
-2. Set `GEMINI_API_KEY`, `BRIGHTDATA_API_KEY`, and `BRIGHTDATA_COLLECTOR_ID` as server environment variables. Keep `CORS_ORIGINS` empty for the unified deployment. Set `/healthz` as the health check.
+2. Set `GEMINI_API_KEY`, `BRIGHTDATA_API_KEY`, and `BRIGHTDATA_COLLECTOR_ID` and a search zone (`BRIGHTDATA_SERP_ZONE` or `BRIGHTDATA_UNLOCKER_ZONE`) as server environment variables. Keep `CORS_ORIGINS` empty for the unified deployment. Set `/healthz` as the health check.
 3. Deploy and open the assigned HTTPS service URL. Render supplies `PORT`; the process binds to `HOST`, defaulting to `0.0.0.0`.
 
 The Dockerfile compiles Tailwind and frontend assets, installs a locked Bright Data CLI during the build, and runs as a non-root user. It does not copy `.env` or cached job data. No persistent disk is required. For Docker outside Render, supply `PORT` and publish that same container port using your chosen host port; Docker does not infer published ports from environment variables.
@@ -49,10 +49,11 @@ The browser connects directly to Render for SSE and POST requests; there is no V
 | --- | --- |
 | `GEMINI_API_KEY` | Server-only Gemini credential. Required for discovery. |
 | `BRIGHTDATA_API_KEY` | Server-only Bright Data credential. No interactive login needed. |
+| `BRIGHTDATA_SERP_ZONE` / `BRIGHTDATA_UNLOCKER_ZONE` | Search zone name from your Bright Data account; set at least one. Local CLI settings are not copied into Docker. |
 | `BRIGHTDATA_COLLECTOR_ID` | Scraper Studio collector trained for Lever pages. |
 | `BRIGHTDATA_ASHBY_COLLECTOR_ID` | Optional collector trained for Ashby pages. |
 | `BRIGHTDATA_GREENHOUSE_COLLECTOR_ID` | Optional collector trained for Greenhouse pages. |
-| `GEMINI_MODEL` | Model accessible to your account; defaults to `gemini-2.5-flash`. |
+| `GEMINI_MODEL` | Model accessible to your account; defaults to `gemini-3.5-flash-lite`. |
 | `CORS_ORIGINS` | Exact permitted frontend origins; empty for same-origin use. |
 | `HOST` / `PORT` | Bind interface and platform-assigned port. No fixed port in code. |
 | `PUBLIC_API_BASE_URL` | Public frontend build-time API origin; empty for same-origin builds. |

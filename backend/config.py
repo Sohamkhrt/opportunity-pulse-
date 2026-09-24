@@ -25,7 +25,7 @@ def cors_origins() -> list[str]:
     return origins
 
 
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 PROVIDER_TIMEOUT = positive_int("PROVIDER_TIMEOUT_SECONDS", 120)
 DISCOVERY_TIMEOUT = positive_int("DISCOVERY_TIMEOUT_SECONDS", 900)
 MAX_CONCURRENT = positive_int("MAX_CONCURRENT_REQUESTS", 2)
@@ -47,6 +47,8 @@ class ProviderError(RuntimeError):
 
 def require_configuration() -> None:
     missing = [name for name in ("GEMINI_API_KEY", "BRIGHTDATA_API_KEY") if not os.getenv(name, "").strip()]
+    if not (os.getenv("BRIGHTDATA_SERP_ZONE", "").strip() or os.getenv("BRIGHTDATA_UNLOCKER_ZONE", "").strip()):
+        missing.append("BRIGHTDATA_SERP_ZONE or BRIGHTDATA_UNLOCKER_ZONE")
     if not any(COLLECTORS.values()):
         missing.append("BRIGHTDATA_COLLECTOR_ID (or an ATS-specific collector)")
     if missing:
