@@ -195,3 +195,43 @@ def test_stream_deadline_cleans_up(monkeypatch):
     assert 'timed out' in events(response)[0]['message']
     assert closed == [True]
     assert main.slots._value == 2
+
+
+def test_search_retries_header_failure_without_leaking_provider_output(monkeypatch):
+    failed = AsyncMock()
+    failed.returncode = 1
+    failed.communicate.return_value = (b'', b'Error: redirect location was rejected secret=do-not-expose')
+    success = AsyncMock()
+    success.returncode = 0
+    success.communicate.return_value = (b'{"organic": []}', b'')
+    spawn = AsyncMock(side_effect=[failed, success])
+    monkeypatch.setattr(pipeline.asyncio, 'create_subprocess_exec', spawn)
+    monkeypatch.setattr(pipeline.asyncio, 'sleep', AsyncMock())
+    assert asyncio.run(pipeline.bdata_exec('search', 'engineer')) == {'organic': []}
+    assert spawn.await_count == 2
+    assert 'do-not-expose' not in str(pipeline.provider_failure(failed.communicate.return_value[1]))
+
+
+def test_auth_failure_is_not_retried(monkeypatch):
+    failed = AsyncMock()
+    failed.returncode = 1
+    failed.communicate.return_value = (b'', b'Error: unauthorized\n Status: 401')
+    spawn = AsyncMock(return_value=failed)
+    monkeypatch.setattr(pipeline.asyncio, 'create_subprocess_exec', spawn)
+    with pytest.raises(config.ProviderError, match='server API key'):
+        asyncio.run(pipeline.bdata_exec('search', 'engineer'))
+    assert spawn.await_count == 1
+
+
+def test_failed_niche_does_not_stop_later_niches(monkeypatch):
+    pivots = [{'niche_title': name, 'rationale': 'Skills', 'search_dork': name} for name in ['First', 'Second']]
+    monkeypatch.setattr(pipeline, 'expand_niche_ideas_llm', AsyncMock(return_value=pivots))
+    monkeypatch.setattr(pipeline, 'fetch_more_jobs', AsyncMock(side_effect=[
+        pipeline.SearchUnavailable('Temporary failure'),
+        {'jobs': [{'job_title': 'Engineer'}], 'warnings': [], 'next_offset': 1, 'has_more': False},
+    ]))
+    async def collect():
+        return [event async for event in pipeline.stream_niche_discovery('engineer')]
+    result = asyncio.run(collect())
+    assert {'type': 'niche_progress', 'niche': 'First', 'next_offset': 0, 'has_more': True} in result
+    assert result[-1] == {'type': 'done', 'total': 1}

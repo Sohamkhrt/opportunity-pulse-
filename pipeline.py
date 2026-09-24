@@ -1,6 +1,7 @@
 """Cancelable Gemini -> Bright Data search -> Scraper Studio pipeline."""
 import asyncio
 import json
+import logging
 import os
 import re
 import shutil
@@ -8,8 +9,43 @@ from urllib.parse import urlsplit, urlunsplit
 from backend.config import AUTO_HEAL, COLLECTORS, PROVIDER_TIMEOUT, ROOT, ProviderError
 from backend.pivot_engine import expand_niche_ideas_llm
 
+logger = logging.getLogger(__name__)
+
+
+class SearchUnavailable(ProviderError):
+    """A temporary search failure that must not stop other niches."""
+
+
+def provider_failure(stderr: bytes) -> ProviderError:
+    # Only fixed messages leave this function. Provider output may contain secrets.
+    detail = stderr.decode("utf-8", errors="replace").lower()
+    if any(x in detail for x in ("status: 401", "invalid api key", "expired api key", "invalid or expired")):
+        return ProviderError("Bright Data rejected the server API key. Update BRIGHTDATA_API_KEY in Render.")
+    if any(x in detail for x in ("status: 403", "access denied", "permission")):
+        return ProviderError("Bright Data denied access. Check the API key's zone and collector permissions.")
+    if any(x in detail for x in ("quota", "insufficient", "balance", "credit", "billing")):
+        return ProviderError("Bright Data account credits or quota are unavailable. Check the account usage limit.")
+    if any(x in detail for x in ("no zone", "zone not found", "zone is not", "invalid zone")):
+        return ProviderError("Bright Data search zone is unavailable. Check BRIGHTDATA_SERP_ZONE in Render.")
+    if any(x in detail for x in ("redirect location was rejected", "captcha", "rate limit", "status: 429", "status: 500", "status: 502", "status: 503", "status: 504", "network request failed", "timeout", "timed out")):
+        return SearchUnavailable("Bright Data search is temporarily unavailable. Please retry this niche shortly.")
+    return ProviderError("Bright Data request failed. Check server credentials, collector, zones and quota.")
+
 
 async def bdata_exec(*arguments: str):
+    # CLI retries HTTP failures, but not provider failures sent in HTTP-200 headers.
+    # Retry read-only search only; never repeat scraper mutations automatically.
+    attempts = 3 if arguments[0] == "search" else 1
+    for attempt in range(attempts):
+        try:
+            return await _bdata_once(*arguments)
+        except SearchUnavailable:
+            if attempt + 1 == attempts:
+                raise
+            await asyncio.sleep(2 ** attempt)
+
+
+async def _bdata_once(*arguments: str):
     # Direct Node invocation also works on Windows, without a shell or npx prompts.
     entry = ROOT / "node_modules" / "@brightdata" / "cli" / "dist" / "index.js"
     node = shutil.which("node")
@@ -21,7 +57,7 @@ async def bdata_exec(*arguments: str):
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env,
     )
     try:
-        stdout, _ = await asyncio.wait_for(process.communicate(), timeout=PROVIDER_TIMEOUT)
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=PROVIDER_TIMEOUT)
     except (TimeoutError, asyncio.CancelledError):
         if process.returncode is None:
             try:
@@ -31,7 +67,9 @@ async def bdata_exec(*arguments: str):
         await process.communicate()
         raise
     if process.returncode:
-        raise ProviderError("Bright Data request failed. Check server credentials, collector, zones and quota.")
+        failure = provider_failure(stderr)
+        logger.warning("Bright Data %s: %s", arguments[0], str(failure))
+        raise failure
     try:
         result = json.loads(stdout)
         if isinstance(result, dict) and result.get("error"):
@@ -145,7 +183,12 @@ async def stream_niche_discovery(user_background: str):
     for pivot in pivots:
         niche = pivot["niche_title"]
         yield {"type": "searching_niche", "niche": niche}
-        result = await fetch_more_jobs(niche, pivot["search_dork"], offset=0, limit=1)
+        try:
+            result = await fetch_more_jobs(niche, pivot["search_dork"], offset=0, limit=1)
+        except (SearchUnavailable, TimeoutError):
+            yield {"type": "log", "message": f"Search temporarily unavailable for {niche}. Use Find More to retry."}
+            yield {"type": "niche_progress", "niche": niche, "next_offset": 0, "has_more": True}
+            continue
         for warning in result["warnings"]:
             yield {"type": "log", "message": warning}
         for job in result["jobs"]:
