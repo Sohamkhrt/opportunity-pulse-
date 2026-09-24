@@ -12,6 +12,16 @@ from backend.pivot_engine import expand_niche_ideas_llm
 logger = logging.getLogger(__name__)
 
 
+def safe_diagnostic(stderr: bytes) -> str:
+    lines = stderr.decode("utf-8", errors="replace").splitlines()
+    detail = " ".join(line for line in lines if line.strip().lower().startswith(("error:", "status:", "hint:")))
+    for name, value in os.environ.items():
+        if value and len(value) > 3 and any(word in name.upper() for word in ("KEY", "TOKEN", "SECRET", "PASSWORD")):
+            detail = detail.replace(value, "[redacted]")
+    detail = re.sub(r"https?://\S+|Bearer\s+\S+|[A-Za-z0-9_=-]{24,}", "[redacted]", detail, flags=re.I)
+    return detail[:500]
+
+
 class SearchUnavailable(ProviderError):
     """A temporary search failure that must not stop other niches."""
 
@@ -68,7 +78,9 @@ async def _bdata_once(*arguments: str):
         raise
     if process.returncode:
         failure = provider_failure(stderr)
-        logger.warning("Bright Data %s: %s", arguments[0], str(failure))
+        logger.warning("Bright Data %s: %s (%s)", arguments[0], str(failure), safe_diagnostic(stderr))
+        if arguments[0] == "search" and str(failure).startswith("Bright Data request failed."):
+            failure = SearchUnavailable("Bright Data search is temporarily unavailable. Please retry this niche shortly.")
         raise failure
     try:
         result = json.loads(stdout)
